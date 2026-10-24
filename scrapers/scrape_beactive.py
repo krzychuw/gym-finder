@@ -1,10 +1,10 @@
-"""Scrapes the public BeActive club list and stores facilities located in
-config.CITY_NAME into raw_facilities.
+"""Scrapes the public BeActive club list nationwide and stores all facilities
+into raw_facilities.
 
 The our-clubs page (ebeactive.pl/en/our-clubs) server-renders the full
 nationwide club list as a `const clubs = [...]` JSON array embedded in the
 page (no separate API endpoint, no bot-detection) - so we just fetch that one
-page and filter by city locally, same approach as the Medicover scraper.
+page, no per-city filtering needed.
 """
 
 import json
@@ -17,7 +17,6 @@ import httpx
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import config
 from common.categories import normalize_category
 from db import get_connection, init_db
 
@@ -97,7 +96,12 @@ def save_rows(rows: list[dict]) -> int:
                 ),
             )
         conn.commit()
-        return len(rows)
+        # Not len(rows): a handful of clubs share a facility_id (e.g. the
+        # same physical club listed under more than one membership tier),
+        # which ON CONFLICT collapses into fewer actual rows.
+        return conn.execute(
+            "SELECT COUNT(*) FROM raw_facilities WHERE package_id = ?", (package_id,)
+        ).fetchone()[0]
     finally:
         conn.close()
 
@@ -108,14 +112,11 @@ def main() -> None:
     clubs = fetch_all_clubs()
     print(f"Fetched {len(clubs)} clubs nationwide.")
 
-    local_clubs = [c for c in clubs if (c.get("city") or "").strip() == config.CITY_NAME]
-    print(f"{len(local_clubs)} clubs in {config.CITY_NAME}.")
-
     # A handful of entries have no real coordinates (null latitude/longitude).
-    local_clubs = [c for c in local_clubs if c.get("latitude") is not None and c.get("longitude") is not None]
-    print(f"{len(local_clubs)} of them have real coordinates.")
+    clubs = [c for c in clubs if c.get("latitude") is not None and c.get("longitude") is not None]
+    print(f"{len(clubs)} of them have real coordinates.")
 
-    rows = [to_row(item) for item in local_clubs]
+    rows = [to_row(item) for item in clubs]
     saved = save_rows(rows)
     print(f"Saved/updated {saved} rows for package '{PACKAGE_SLUG}'.")
 

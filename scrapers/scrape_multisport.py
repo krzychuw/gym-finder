@@ -1,5 +1,5 @@
-"""Scrapes Multisport facilities in config.CITY_NAME using a real headless
-browser session.
+"""Scrapes Multisport facilities nationwide using a real headless browser
+session.
 
 The underlying API (bam.benefitsystems.online/bam/search/.../sport-facilities/list)
 sits behind bot-detection that rejects plain HTTP requests (even ones that
@@ -7,14 +7,20 @@ copy every header a browser would send) with a 403, and also rejects
 "foreign" fetch() calls made from within a real browser page if they weren't
 triggered by genuine UI interaction. So instead of calling the API directly,
 this script drives the real search page like a user would: it loads the
-Warsaw view and repeatedly scrolls the results list, which is what makes the
+search view and repeatedly scrolls the results list, which is what makes the
 page's own code fire the paginated API calls - and just listens in on the
 JSON responses as they go by.
+
+The API filters results to whatever the map's current viewport covers, not
+just the visible/loaded page - so a single pass at a country-wide zoom level
+(centered on Poland, zoom 6) reports the *national* totalCount (confirmed
+experimentally: ~6979) and the same scroll-to-paginate trick captures all of
+it, no per-city tiling needed.
 
 Confirmed experimentally: setting `scrollTop = scrollHeight` on
 `ul.map-side-drawer__list` triggers the next page load; stopping once the
 running unique count reaches the API's own `totalCount` reliably captured
-all 828 Warsaw facilities in testing.
+all facilities in testing.
 """
 
 import json
@@ -31,12 +37,12 @@ from db import get_connection, init_db
 
 SEARCH_URL = (
     "https://www.kartamultisport.pl/multisport/wyszukiwarka-obiektow"
-    f"#/@{config.WARSAW_CENTER['lat']},{config.WARSAW_CENTER['lon']},11z?cards=1"
+    f"#/@{config.POLAND_CENTER['lat']},{config.POLAND_CENTER['lon']},6z?cards=1"
 )
 LIST_SELECTOR = "ul.map-side-drawer__list"
 PACKAGE_SLUG = "multisport"
-MAX_SCROLL_ITERATIONS = 80
-STABLE_ITERATIONS_TO_STOP = 5
+MAX_SCROLL_ITERATIONS = 700
+STABLE_ITERATIONS_TO_STOP = 8
 
 
 def scrape_facilities() -> list[dict]:
@@ -157,7 +163,9 @@ def save_rows(rows: list[dict]) -> int:
                 ),
             )
         conn.commit()
-        return len(rows)
+        return conn.execute(
+            "SELECT COUNT(*) FROM raw_facilities WHERE package_id = ?", (package_id,)
+        ).fetchone()[0]
     finally:
         conn.close()
 

@@ -1,16 +1,25 @@
-const WARSAW_CENTER = [52.2297, 21.0122];
+const POLAND_CENTER = [52.0, 19.2];
 
-const map = L.map('map').setView(WARSAW_CENTER, 12);
+const map = L.map('map').setView(POLAND_CENTER, 6);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; OpenStreetMap contributors',
     maxZoom: 19,
 }).addTo(map);
 
+// Nationwide, the result set can run into the thousands - plotting that many
+// individual markers directly on the map makes panning/zooming janky.
+// markerClusterGroup groups nearby markers into one clickable cluster bubble
+// that expands as you zoom in, and chunkedLoading spreads the work of adding
+// a large batch of markers across animation frames instead of doing it all
+// in one blocking pass, so the UI stays responsive.
+const markerClusterGroup = L.markerClusterGroup({ chunkedLoading: true });
+map.addLayer(markerClusterGroup);
+
 let markers = [];
 let allFacilities = [];
 
 function clearMarkers() {
-    markers.forEach((m) => map.removeLayer(m));
+    markerClusterGroup.clearLayers();
     markers = [];
 }
 
@@ -59,6 +68,7 @@ function renderResults(facilities) {
     count.textContent = `${facilities.length} ${facilities.length === 1 ? 'obiekt' : 'obiektów'}`;
 
     const bounds = [];
+    const fragment = document.createDocumentFragment();
     facilities.forEach((f) => {
         const card = document.createElement('div');
         card.className = 'facility-card';
@@ -85,18 +95,23 @@ function renderResults(facilities) {
             card.appendChild(badge);
         });
 
-        const marker = L.marker([f.lat, f.lon]).addTo(map);
+        const marker = L.marker([f.lat, f.lon]);
         marker.bindPopup(`<strong>${f.name}</strong><br>${f.address || ''}<br>${f.packages.join(', ')}`);
         markers.push(marker);
         bounds.push([f.lat, f.lon]);
 
         card.addEventListener('click', () => {
-            map.setView([f.lat, f.lon], 16);
-            marker.openPopup();
+            markerClusterGroup.zoomToShowLayer(marker, () => marker.openPopup());
         });
 
-        list.appendChild(card);
+        fragment.appendChild(card);
     });
+    list.appendChild(fragment);
+
+    // addLayers (bulk) is far faster than calling addLayer per marker in a
+    // loop - it batches the cluster tree rebuild instead of redoing it after
+    // every single insert.
+    markerClusterGroup.addLayers(markers);
 
     if (bounds.length > 0) {
         map.fitBounds(bounds, { padding: [30, 30], maxZoom: 15 });

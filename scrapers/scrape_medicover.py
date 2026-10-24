@@ -1,9 +1,8 @@
-"""Scrapes the public Medicover Sport locations API and stores facilities
-located in config.CITY_NAME into raw_facilities.
+"""Scrapes the public Medicover Sport locations API nationwide and stores all
+facilities into raw_facilities.
 
 The API (search-api.medicoversport.pl/v1/locations) requires no auth and
-supports limit/page pagination, but ignores any city filter param - so we
-fetch every page (nationwide) and filter by address.city locally.
+supports limit/page pagination, so we just fetch every page.
 """
 
 import json
@@ -110,7 +109,12 @@ def save_rows(rows: list[dict]) -> int:
                 ),
             )
         conn.commit()
-        return len(rows)
+        # Not len(rows): the source list can contain duplicate external_ids
+        # (e.g. items shifting between pages while a 73-page fetch is in
+        # flight), which ON CONFLICT collapses into fewer actual rows.
+        return conn.execute(
+            "SELECT COUNT(*) FROM raw_facilities WHERE package_id = ?", (package_id,)
+        ).fetchone()[0]
     finally:
         conn.close()
 
@@ -121,18 +125,23 @@ def main() -> None:
     items = fetch_all_locations()
     print(f"Fetched {len(items)} locations total.")
 
-    warsaw_items = [
-        item for item in items
-        if item.get("address", {}).get("city", "").strip().lower() == config.CITY_NAME.lower()
-    ]
-    print(f"{len(warsaw_items)} of them are in {config.CITY_NAME}.")
-
     # A handful of entries (e.g. "ONLINE_..." remote classes) have no real
     # location and so an empty list instead of a {lat, lon} dict.
-    warsaw_items = [item for item in warsaw_items if isinstance(item.get("coordinates"), dict)]
-    print(f"{len(warsaw_items)} of them have real coordinates.")
+    items = [item for item in items if isinstance(item.get("coordinates"), dict)]
+    print(f"{len(items)} of them have real coordinates.")
 
-    rows = [to_row(item) for item in warsaw_items]
+    # A handful more carry a bad coordinate from Medicover's own system (a
+    # stale/test placeholder abroad, or a missing longitude defaulting to 0)
+    # rather than their real address - drop anything outside Poland.
+    min_lat, min_lon, max_lat, max_lon = config.POLAND_BBOX
+    items = [
+        item for item in items
+        if min_lat <= float(item["coordinates"]["lat"]) <= max_lat
+        and min_lon <= float(item["coordinates"]["lon"]) <= max_lon
+    ]
+    print(f"{len(items)} of them are within Poland's bounding box.")
+
+    rows = [to_row(item) for item in items]
     saved = save_rows(rows)
     print(f"Saved/updated {saved} rows for package '{PACKAGE_SLUG}'.")
 

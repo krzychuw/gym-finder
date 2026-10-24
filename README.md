@@ -1,8 +1,8 @@
 # Wspólne obiekty sportowe
 
-Wyszukiwarka siłowni/basenów w Warszawie, które przyjmują wejścia z kilku
-różnych pakietów sportowych naraz (Medicover Sport, Multisport) — żeby łatwo
-znaleźć wspólny obiekt, gdy znajomi mają różne karty.
+Wyszukiwarka siłowni/basenów w całej Polsce, które przyjmują wejścia z kilku
+różnych pakietów sportowych naraz (Medicover Sport, Multisport, BeActive) —
+żeby łatwo znaleźć wspólny obiekt, gdy znajomi mają różne karty.
 
 Aplikacja to w 100% statyczna strona (HTML/CSS/JS + dane w JSON) — nie ma
 żadnego backendu. Dane są scrapowane i dopasowywane raz (lub gdy chcesz je

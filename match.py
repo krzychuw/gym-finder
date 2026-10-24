@@ -21,7 +21,6 @@ from __future__ import annotations
 import json
 import sys
 from datetime import datetime, timezone
-from itertools import combinations
 from pathlib import Path
 
 from rapidfuzz import fuzz
@@ -80,17 +79,45 @@ def load_raw_facilities(conn) -> list[dict]:
     return [dict(row) for row in rows]
 
 
+# Side length (in degrees) of the spatial grid cells used to bucket
+# facilities before matching. At Poland's latitude this is roughly 1.1km
+# (N-S) x 0.7km (E-W) - comfortably larger than MATCH_DISTANCE_THRESHOLD_M,
+# so checking a facility's own cell plus its 8 neighbors can never miss a
+# match. Nationwide, comparing every pair directly (combinations() over
+# ~14k facilities) is ~10^8 comparisons and impractically slow; bucketing
+# first cuts each facility's comparisons down to roughly how many other
+# facilities sit within ~1-2km of it, which is what actually bounds whether
+# two places could be the same physical location.
+GRID_CELL_DEG = 0.01
+
+
+def _grid_cell(facility: dict) -> tuple[int, int]:
+    return (int(facility["lat"] / GRID_CELL_DEG), int(facility["lon"] / GRID_CELL_DEG))
+
+
 def build_matches(facilities: list[dict]) -> dict:
     uf = UnionFind([f["id"] for f in facilities])
     scores: dict[tuple, float] = {}
 
-    for a, b in combinations(facilities, 2):
-        if a["package_id"] == b["package_id"]:
-            continue
-        matched, score = is_match(a, b)
-        if matched:
-            uf.union(a["id"], b["id"])
-            scores[(a["id"], b["id"])] = score
+    buckets: dict[tuple, list[dict]] = {}
+    for f in facilities:
+        buckets.setdefault(_grid_cell(f), []).append(f)
+
+    for a in facilities:
+        gx, gy = _grid_cell(a)
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                for b in buckets.get((gx + dx, gy + dy), []):
+                    # Process each unordered pair exactly once regardless of
+                    # which of the two facilities' neighborhoods finds it.
+                    if b["id"] <= a["id"]:
+                        continue
+                    if a["package_id"] == b["package_id"]:
+                        continue
+                    matched, score = is_match(a, b)
+                    if matched:
+                        uf.union(a["id"], b["id"])
+                        scores[(a["id"], b["id"])] = score
 
     return {"uf": uf, "scores": scores}
 

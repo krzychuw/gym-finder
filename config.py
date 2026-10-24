@@ -7,10 +7,17 @@ SCHEMA_PATH = BASE_DIR / "schema.sql"
 MULTISPORT_DUMP_PATH = DATA_DIR / "multisport_raw_dump.json"
 FACILITY_OVERRIDES_PATH = DATA_DIR / "facility_overrides.json"
 
-CITY_NAME = "Warszawa"
-# Center of Warsaw, used as the default map view and as the search anchor
-# for the Multisport scraper (its search UI is centered on a map viewport).
-WARSAW_CENTER = {"lat": 52.2297, "lon": 21.0122}
+# Geographic center of Poland, used as the search anchor for the Multisport
+# scraper (its search UI is centered on a map viewport) at a zoom level wide
+# enough that the viewport covers the whole country in one pass.
+POLAND_CENTER = {"lat": 52.0, "lon": 19.2}
+
+# Generous bounding box around Poland (min_lat, min_lon, max_lat, max_lon),
+# used to drop the odd bad-data location a provider's own API hands back
+# (e.g. a handful of Medicover entries with a stale/test placeholder
+# coordinate, or a missing longitude silently defaulting to 0) before it
+# ends up as a stray pin off in the ocean or another country.
+POLAND_BBOX = (49.0, 14.0, 55.0, 24.5)
 
 # Packages supported today. Adding a new one (e.g. FitProfit) only requires
 # a new entry here plus a new scrapers/scrape_<slug>.py writing into the same
