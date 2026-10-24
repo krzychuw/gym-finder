@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wspólne obiekty sportowe</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header>
+    <h1>Wspólne obiekty sportowe</h1>
+    <p>Zaznacz pakiety, żeby zobaczyć obiekty w Warszawie, które przyjmują je wszystkie naraz.</p>
+</header>
+
+<div id="controls">
+    <fieldset>
+        <legend>Pakiety</legend>
+        <div id="package-checkboxes" class="checkbox-row"></div>
+    </fieldset>
+    <fieldset>
+        <legend>Kategoria</legend>
+        <select id="category-select">
+            <option value="">Wszystkie kategorie</option>
+        </select>
+    </fieldset>
+</div>
+
+<div id="layout">
+    <div id="results">
+        <div id="result-count"></div>
+        <div id="result-list"></div>
+    </div>
+    <div id="map"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
